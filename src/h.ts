@@ -374,12 +374,8 @@ function createdHookedComponent(source: ComponentFn) {
             return output;
         }
 
-        let output = call();
-
-        if (!hooked) return output;
-
         return {
-            async *[Symbol.asyncIterator]() {
+            async *[Symbol.asyncIterator](): AsyncIterable<unknown> {
 
                 const effects = new Set();
 
@@ -418,7 +414,15 @@ function createdHookedComponent(source: ComponentFn) {
                     }
                 }
 
-                while (isActive) {
+                let output;
+
+                do {
+
+                    output = call();
+
+                    if (!hooked) {
+                        return yield output;
+                    }
 
                     let statePromise;
 
@@ -451,14 +455,7 @@ function createdHookedComponent(source: ComponentFn) {
 
                     await statePromise;
 
-                    if (isActive) {
-                        output = call();
-                    }
-                }
-
-
-
-
+                } while (isActive);
             }
         }
     }
