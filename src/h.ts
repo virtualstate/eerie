@@ -1,8 +1,10 @@
 import { h as f } from "@virtualstate/focus/h";
 import {isAsyncIterable, isPromise} from "./is";
-import {anAsyncThing} from "@virtualstate/promise/the-thing";
-import {Push} from "@virtualstate/promise";
+import {PushFn, p, union} from "@virtualstate/promise";
 import {ok} from "@virtualstate/focus";
+import {createCompositeKey, CompositeKeyFn} from "@virtualstate/composite-key";
+
+type CompositeKey = ReturnType<CompositeKeyFn>;
 
 export function h(source: unknown, options: Record<string | symbol, unknown>, ...children: unknown[]) {
     if (isComponentFn(source)) {
@@ -27,34 +29,84 @@ interface ComponentFn<O = Record<string | symbol, unknown>> {
 }
 
 type UseStateDefault<T> = (() => T) | T;
-type UseStateReturn<T> = [T, (value: T) => void];
+type UseStateActionInput<T> = ((value: T) => T) | T;
+type UseStateReturn<T> = [T, (input: UseStateActionInput<T>) => void];
+
+interface EffectReturnFn {
+    (): unknown
+}
+interface EffectFn {
+    (): EffectReturnFn | unknown
+}
+type CallbackFn = () => unknown;
+interface MemoFn<T> {
+    (): T
+}
+interface CloseFn {
+    (): void;
+}
+
+type Dependencies = unknown[];
 
 interface ComponentFnContext {
     useState<T>(defaultValue?: UseStateDefault<T>): UseStateReturn<T>;
-    useEffect(...args: unknown[]): void
-    useCallback(...args: unknown[]): unknown
-    useMemo(...args: unknown[]): unknown
-    usePush<T>(value?: T): [Push<T>, (value: T) => void];
+    useEffect(fn: EffectFn, dependencies?: Dependencies): void
+    useCallback<Callback extends CallbackFn>(fn: Callback, dependencies?: Dependencies): Callback
+    useMemo<T>(fn: MemoFn<T>, dependencies?: Dependencies): unknown
+    usePush<T>(value?: T): PushFn<T>;
+    useClose(): CloseFn;
 }
 
-const UseState = Symbol.for("@virtualstate/eerie/useState");
+const State = Symbol.for("@virtualstate/eerie/state");
+const StateValue = Symbol.for("@virtualstate/eerie/state/value");
+const StateAction = Symbol.for("@virtualstate/eerie/state/action");
+const StateClose = Symbol.for("@virtualstate/eerie/state/close");
+
+const Push = Symbol.for("@virtualstate/eerie/push");
+const Effect = Symbol.for("@virtualstate/eerie/effect");
+const Callback = Symbol.for("@virtualstate/eerie/callback");
+const Memo = Symbol.for("@virtualstate/eerie/memo");
 
 interface UseStateActionFn<T> {
-    (input: ((value: T) => T) | T): void;
+    (input: UseStateActionInput<T>): void;
 }
 
-interface UseStateHookObject<T = unknown> extends AsyncIterable<T>, Iterable<T | UseStateActionFn<T>> {
+interface UseStateHookObject<T = unknown> extends AsyncIterable<UseStateActionInput<T>>, Iterable<T | UseStateActionFn<T>> {
     0: T;
     1: UseStateActionFn<T>;
     length: 2;
-    value: T
-    action: UseStateActionFn<T>;
+    [StateValue]: T
+    [StateAction]: UseStateActionFn<T>;
+    [StateClose]: CloseFn;
 }
 
 type UseStateHook<T = unknown> = [T, UseStateActionFn<T>] & UseStateHookObject<T>;
 
+interface UseEffectHook {
+    effect: EffectFn
+    dependencies?: Dependencies
+}
+
+interface UseCallbackHook<C extends CallbackFn = CallbackFn> {
+    callback: C;
+    dependencies?: Dependencies;
+}
+
+interface MemoValue<T> {
+    value: T
+}
+
+interface UseMemoHook<T = unknown> {
+    values: WeakMap<CompositeKey, MemoValue<T>>;
+    keys: CompositeKeyFn;
+}
+
 interface Hook {
-    [UseState]?: UseStateHook
+    [State]?: UseStateHook
+    [Push]?: PushFn<unknown>
+    [Effect]?: UseEffectHook[];
+    [Callback]?: UseCallbackHook;
+    [Memo]?: UseMemoHook;
 }
 
 export type This = ComponentFnContext;
@@ -66,16 +118,24 @@ function createdHookedComponent(source: ComponentFn) {
 
     let hooked = false;
 
-    function getHook<K extends keyof Hook, T extends Hook[K]>(
+    function useHook<K extends keyof Hook, T extends Hook[K]>(
         key: K,
         is: (value: unknown) => value is T,
-        create: () => T
+        create: () => T,
+        update?: (hook: T) => T | undefined
     ): T {
         hooked = true;
         hookIndex += 1;
         let hook = hooks.at(hookIndex);
         const existing = hook?.[key];
         if (is(existing)) {
+            if (update) {
+                const next = update(existing);
+                if (next) {
+                    hook[key] = next;
+                    return next;
+                }
+            }
             return existing;
         }
         const created = create();
@@ -88,24 +148,39 @@ function createdHookedComponent(source: ComponentFn) {
     }
 
     let hooks: Hook[] = [],
-        hookIndex = -1;
+        hookIndex = -1,
+        isStateful = false,
+        isActive = true;
+
+    function close() {
+        if (!isActive) return;
+        isActive = false;
+        for (const hook of hooks) {
+            const {
+                [State]: state
+            } = hook;
+            if (state) {
+                state[StateClose]();
+            }
+        }
+    }
 
     function useState<T>(defaultValue?: UseStateDefault<T>): UseStateReturn<T> {
-        return getHook(
-            UseState,
-            isUseStateHook,
-            createHook
+        isStateful = true;
+
+        return useHook(
+            State,
+            isState,
+            createState
         );
 
         function isInitFn(value: unknown): value is () => T {
             return typeof value === "function";
         }
 
-        function createHook(): UseStateHook<T> {
+        function createState(): UseStateHook<T> {
 
-            const target = new Push<T>({
-                keep: true
-            });
+            const target = p();
 
             let value: T;
             
@@ -117,62 +192,159 @@ function createdHookedComponent(source: ComponentFn) {
 
             const object: UseStateHookObject<T> = {
                 get "0"() {
-                    return object.value;
+                    return object[StateValue];
                 },
                 get "1"() {
-                    return object.action;
+                    return object[StateAction];
                 },
                 length: 2,
-                value,
-                action(input) {
-                    let next: T;
-                    if (isCallbackFn(input)) {
-                        next = input(value);
-                    } else {
-                        next = value;
+                [StateValue]: value,
+                [StateAction](input) {
+                    if (target.open) {
+                        target(input);
                     }
+                },
+                [StateClose]() {
+                  target.close();
                 },
                 [Symbol.asyncIterator]: target[Symbol.asyncIterator].bind(target),
                 *[Symbol.iterator]() {
-                    yield object.value;
+                    yield object[StateValue];
+                    yield object[StateAction];
                 }
             }
             ok<UseStateHook<T>>(object);
             return object;
-
-            function isCallbackFn(value: unknown): value is (value: T) => T {
-                return typeof value === "function";
-            }
         }
 
-        function isUseStateHook(value?: UseStateHook<unknown>): value is UseStateHook<T> {
+        function isState(value?: UseStateHook): value is UseStateHook<T> {
             return !!value;
         }
     }
 
-    function useEffect() {
-        hooked = true;
+    function isDependenciesMatch(left?: Dependencies, right?: Dependencies) {
+        if (!left?.length) {
+            return !right?.length;
+        }
+        if (!right?.length) return false;
+        if (left.length !== right.length) {
+            return false;
+        }
+        return left.every((value, index) => right[index] === value);
     }
 
-    function useCallback(defaultValue: unknown) {
+    function useEffect(effect: EffectFn, dependencies?: Dependencies) {
         hooked = true;
-        return defaultValue;
+        return useHook(
+            Effect,
+            isEffect,
+            createEffect,
+            updateEffect
+        );
+
+        function createEffect() {
+            return [
+                {
+                    effect,
+                    dependencies
+                }
+            ]
+        }
+
+        function updateEffect(effects: UseEffectHook[]) {
+            const last = effects.at(-1);
+            ok(last);
+            const match = isDependenciesMatch(last.dependencies, dependencies);
+            // console.log({ match, last: last.dependencies, dependencies });
+            if (match) {
+                return effects;
+            }
+            return effects.concat({
+                effect,
+                dependencies
+            })
+        }
+
+        function isEffect(value: unknown): value is UseEffectHook[] {
+            return Array.isArray(value);
+        }
     }
 
-    function useMemo(defaultValue: unknown) {
-        hooked = true;
-        return defaultValue;
+    function useCallback<C extends CallbackFn>(fn: C, dependencies?: Dependencies): C {
+        const { callback } = useHook(
+            Callback,
+            isCallbackHook,
+            createCallback,
+            updateCallback
+        );
+        return callback;
+
+        function isCallbackHook(value?: UseCallbackHook): value is UseCallbackHook<C> {
+            return !!value;
+        }
+
+        function createCallback(): UseCallbackHook<C> {
+            return { callback: fn, dependencies };
+        }
+
+        function updateCallback(hook: UseCallbackHook<C>) {
+            if (isDependenciesMatch(hook.dependencies, dependencies)) {
+                return hook;
+            }
+            return createCallback();
+        }
+    }
+
+    function useMemo<T>(fn: MemoFn<T>, dependencies?: Dependencies): T {
+        const { keys, values } = useHook(
+            Memo,
+            isMemoHook,
+            createMemo
+        );
+        const key = keys(...dependencies);
+        const existing = values.get(key);
+        if (existing) {
+            return existing.value;
+        }
+        const value = fn();
+        values.set(key, {
+            value
+        });
+        return value;
+
+        function isMemoHook(value?: UseMemoHook): value is UseMemoHook<T> {
+            return value instanceof WeakMap;
+        }
+        function createMemo() {
+            return {
+                values: new WeakMap(),
+                keys: createCompositeKey()
+            };
+        }
     }
 
     function usePush<T>(...{ 0: defaultValue, length: args }: [T]) {
-        const target = new Push<T>();
-        if (args) {
-            target.push(defaultValue);
+        return useHook(
+            Push,
+            isPushFn,
+            createPushFn
+        );
+
+        function createPushFn(): PushFn<T> {
+            const target = p<T>();
+            if (args) {
+                target(defaultValue);
+            }
+            return target;
         }
-        return [
-            target,
-            target.push.bind(target)
-        ];
+
+        function isPushFn(value: unknown): value is PushFn<T> {
+            return typeof value === "function";
+        }
+    }
+
+    function useClose() {
+        return close;
     }
 
     return function HookedComponent(this: unknown, options: Record<string | symbol, unknown>, input: unknown) {
@@ -182,10 +354,14 @@ function createdHookedComponent(source: ComponentFn) {
             useState,
             useEffect,
             useCallback,
-            useMemo
+            useMemo,
+            usePush,
+            useClose
         }
 
         function call() {
+            hookIndex = -1;
+
             const output = source.call(
                 context,
                 options,
@@ -205,10 +381,80 @@ function createdHookedComponent(source: ComponentFn) {
         return {
             async *[Symbol.asyncIterator]() {
 
+                const effects = new Set();
 
+                let stateIterator: AsyncIterator<void>;
 
+                async function *stateful(): AsyncIterable<void> {
+                    const states = hooks.map(hook => hook[State]).filter(Boolean);
+                    ok(states.length);
+                    for await (const snapshot of union(
+                        states.map(
+                            async function *mapState(state) {
+                                for await (const value of state) {
+                                    yield [state, value] as const;
+                                }
+                            }
+                        )
+                    )) {
+                        for (const [state, input] of snapshot) {
+                            // The actual commit
+                            const [current] = state;
+                            let value;
+                            if (isCallbackFn(input)) {
+                                value = input(current);
+                            } else {
+                                value = input;
+                            }
+                            state[StateValue] = value;
+                            const [newState] = state;
+                            ok(newState === value);
+                        }
+                        yield;
+                    }
 
-                yield output;
+                    function isCallbackFn<T = unknown>(value: unknown): value is (value: T) => T {
+                        return typeof value === "function";
+                    }
+                }
+
+                while (isActive) {
+
+                    let statePromise;
+
+                    if (isStateful) {
+                        stateIterator = stateIterator ?? stateful()[Symbol.asyncIterator]();
+                        statePromise = stateIterator.next();
+                    }
+
+                    for (const hook of hooks) {
+                        const {
+                            [Effect]: effect
+                        } = hook;
+
+                        if (effect) {
+                            const current = effect.at(-1);
+                            if (!effects.has(current)) {
+
+                                await current.effect();
+
+                                effects.add(current);
+                            } else {
+                                // console.log("Already ran effect");
+                            }
+                        }
+                    }
+
+                    yield output;
+
+                    if (!isStateful) return;
+
+                    await statePromise;
+
+                    if (isActive) {
+                        output = call();
+                    }
+                }
 
 
 

@@ -822,10 +822,10 @@
   resolved "https://registry.npmjs.org/@virtualstate/hooks/-/hooks-2.46.0.tgz#7dde6849f234d9c0ebe7bb30b3c239e5880ac1d2"
   integrity sha512-KUTIxVSbU6JWmc6EkTiVsdymsSDGmxOtu7l0FoEwR8saq7e2dIjJfPO1UU7YJdjX+Di4gqjGY+BaEkDgq44+NA==
 
-"@virtualstate/promise@^1.1.6":
-  version "1.1.6"
-  resolved "https://registry.yarnpkg.com/@virtualstate/promise/-/promise-1.1.6.tgz#6db3b498b50bb9c0e0b3a0c875e614f61dfbb65f"
-  integrity sha512-VUHoq3pTT+xczVlBDhMqSp74UguETb+Qu2qBgDHWPLT49Bl4JhmPTLw/unaYaXb+4YaE5mEaxjmvAhY4C1oc9A==
+"@virtualstate/promise@^1.2.1":
+  version "1.2.1"
+  resolved "https://registry.yarnpkg.com/@virtualstate/promise/-/promise-1.2.1.tgz#085a5d5830464f1331f180c3180b38414b1cffd6"
+  integrity sha512-+1Yc2xS9za2zOeaoYgidC96XQ3YwmFSej87p+LWojP+S7GVaLSxQCNYiL83Pv0MpGIJT+j0XDEG+LufhB3Xzug==
 
 "@virtualstate/union@^2.46.0":
   version "2.46.0"
