@@ -46,7 +46,10 @@ interface ComponentFn<O = Record<string | symbol, unknown>> {
 
 type UseStateDefault<T> = (() => T) | T;
 type UseStateActionInput<T> = ((value: T) => T) | T;
-type UseStateReturn<T> = [T, (input: UseStateActionInput<T>) => void];
+interface UseStateActionFn<T> {
+  (input: UseStateActionInput<T>): void;
+}
+type UseStateReturn<T> = readonly [T, UseStateActionFn<T>];
 
 interface EffectReturnFn {
   (): unknown;
@@ -101,13 +104,9 @@ const Effect = Symbol.for("@virtualstate/eerie/effect");
 const Callback = Symbol.for("@virtualstate/eerie/callback");
 const Memo = Symbol.for("@virtualstate/eerie/memo");
 
-interface UseStateActionFn<T> {
-  (input: UseStateActionInput<T>): void;
-}
-
 interface UseStateHookObject<T = unknown>
   extends AsyncIterable<UseStateActionInput<T>>,
-    Iterable<T | UseStateActionFn<T>> {
+    Iterable<UseStateReturn<T>[number]> {
   0: T;
   1: UseStateActionFn<T>;
   length: 2;
@@ -116,8 +115,7 @@ interface UseStateHookObject<T = unknown>
   [StateClose]: CloseFn;
 }
 
-type UseStateHook<T = unknown> = [T, UseStateActionFn<T>] &
-  UseStateHookObject<T>;
+type UseStateHook<T = unknown> = UseStateReturn<T> & UseStateHookObject<T>;
 
 interface UseEffectHook {
   effect: EffectFn;

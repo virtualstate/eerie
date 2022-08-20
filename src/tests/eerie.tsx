@@ -6,10 +6,10 @@ function Component(this: This) {
 
   console.log({ current });
 
-  const [state, setState] = this.useState<number>(0);
+  const [state, setState] = this.useState<number>();
 
   this.useEffect(() => {
-    if (state === 0) {
+    if (!state) {
       setState(1);
     }
     if (state === 1) {
