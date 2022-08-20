@@ -14,6 +14,9 @@ function Component(this: This) {
         if (state === 2) {
             setState(3);
         }
+        return () => {
+            console.log({ was: state });
+        }
     }, [state, setState]);
 
     const callback = this.useCallback(function onClick() {

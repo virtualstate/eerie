@@ -3,6 +3,7 @@ import {isAsyncIterable, isPromise} from "./is";
 import {PushFn, p, union} from "@virtualstate/promise";
 import {ok} from "@virtualstate/focus";
 import {createCompositeKey, CompositeKeyFn} from "@virtualstate/composite-key";
+import {prev} from "cheerio/lib/api/traversing";
 
 type CompositeKey = ReturnType<CompositeKeyFn>;
 
@@ -48,7 +49,17 @@ interface CloseFn {
 
 type Dependencies = unknown[];
 
+const HookState = Symbol.for("@virtualstate/eerie/hook/state");
+
+interface ComponentHookState {
+    hooked: boolean;
+    hooks: Hook[];
+    isStateful: boolean;
+    isOpen: boolean;
+}
+
 interface ComponentFnContext {
+    [HookState]: ComponentHookState
     useState<T>(defaultValue?: UseStateDefault<T>): UseStateReturn<T>;
     useEffect(fn: EffectFn, dependencies?: Dependencies): void
     useCallback<Callback extends CallbackFn>(fn: Callback, dependencies?: Dependencies): Callback
@@ -84,6 +95,7 @@ type UseStateHook<T = unknown> = [T, UseStateActionFn<T>] & UseStateHookObject<T
 
 interface UseEffectHook {
     effect: EffectFn
+    finalise?: EffectReturnFn;
     dependencies?: Dependencies
 }
 
@@ -114,11 +126,23 @@ export type This = ComponentFnContext;
 function createdHookedComponent(source: ComponentFn) {
     return async function *HookedComponent(options: Record<string | symbol, unknown>, input: unknown): AsyncIterable<unknown> {
 
-        let hooked = false,
-            hooks: Hook[] = [],
-            hookIndex = -1,
-            isStateful = false,
-            isActive = true;
+        let hookIndex = -1;
+
+
+        const context: ComponentFnContext = {
+            [HookState]: {
+              hooks: [],
+                hooked: false,
+                isStateful: false,
+                isOpen: true
+            },
+            useState,
+            useEffect,
+            useCallback,
+            useMemo,
+            usePush,
+            useClose
+        }
 
         function useHook<K extends keyof Hook, T extends Hook[K]>(
             key: K,
@@ -126,8 +150,11 @@ function createdHookedComponent(source: ComponentFn) {
             create: () => T,
             update?: (hook: T) => T | undefined
         ): T {
-            hooked = true;
+            context[HookState].hooked = true;
             hookIndex += 1;
+            const {
+                hooks
+            } = context[HookState];
             let hook = hooks.at(hookIndex);
             const existing = hook?.[key];
             if (is(existing)) {
@@ -150,8 +177,9 @@ function createdHookedComponent(source: ComponentFn) {
         }
 
         function close() {
-            if (!isActive) return;
-            isActive = false;
+            if (!context[HookState].isOpen) return;
+            context[HookState].isOpen = false;
+            const { hooks } = context[HookState];
             for (const hook of hooks) {
                 const {
                     [State]: state
@@ -163,7 +191,7 @@ function createdHookedComponent(source: ComponentFn) {
         }
 
         function useState<T>(defaultValue?: UseStateDefault<T>): UseStateReturn<T> {
-            isStateful = true;
+            context[HookState].isStateful = true;
 
             return useHook(
                 State,
@@ -231,7 +259,6 @@ function createdHookedComponent(source: ComponentFn) {
         }
 
         function useEffect(effect: EffectFn, dependencies?: Dependencies) {
-            hooked = true;
             return useHook(
                 Effect,
                 isEffect,
@@ -344,16 +371,6 @@ function createdHookedComponent(source: ComponentFn) {
             return close;
         }
 
-
-        const context: ComponentFnContext = {
-            useState,
-            useEffect,
-            useCallback,
-            useMemo,
-            usePush,
-            useClose
-        }
-
         let stateIterator: AsyncIterator<void> | undefined = undefined;
 
         function call() {
@@ -371,10 +388,8 @@ function createdHookedComponent(source: ComponentFn) {
             return output;
         }
 
-
-        const effects = new Set();
-
         async function *stateful(): AsyncIterable<void> {
+            const { hooks } = context[HookState];
             const states = hooks.map(hook => hook[State]).filter(Boolean);
             ok(states.length);
             for await (const snapshot of union(
@@ -407,10 +422,18 @@ function createdHookedComponent(source: ComponentFn) {
             }
         }
 
+        const effects = new WeakSet();
+
         let output;
 
         do {
             output = call();
+
+            const {
+                hooked,
+                isStateful,
+                hooks
+            } = context[HookState];
 
             if (!hooked) {
                 return yield output;
@@ -429,12 +452,26 @@ function createdHookedComponent(source: ComponentFn) {
                 } = hook;
 
                 if (effect) {
+                    const previous = effect.at(-2);
                     const current = effect.at(-1);
                     if (!effects.has(current)) {
-
-                        await current.effect();
-
                         effects.add(current);
+                        if (previous?.finalise) {
+                            const returned = previous.finalise();
+                            if (isPromise(returned)) {
+                                await returned;
+                            }
+                        }
+                        let returned = current.effect();
+                        if (isPromise(returned)) {
+                            returned = await returned;
+                        }
+                        if (isEffectReturnFn(returned)) {
+                            current.finalise = returned;
+                        }
+                        hook[Effect] = hook[Effect].slice(
+                            hook[Effect].indexOf(current)
+                        );
                     } else {
                         // console.log("Already ran effect");
                     }
@@ -447,6 +484,10 @@ function createdHookedComponent(source: ComponentFn) {
 
             await statePromise;
 
-        } while (isActive);
+        } while (context[HookState].isOpen);
+
+        function isEffectReturnFn(value: unknown): value is EffectReturnFn {
+            return typeof value === "function";
+        }
     }
 }
