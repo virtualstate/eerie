@@ -47,3 +47,4 @@ const [string, number] = await children(button);
 console.log({ string, number });
 ok(typeof string === "string");
 ok(typeof number === "number");
+ok(number === 3);
