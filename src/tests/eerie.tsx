@@ -1,52 +1,54 @@
-import {h, This} from "../h";
-import {children, name, ok, properties} from "@virtualstate/focus";
+import { h, This } from "../h";
+import { children, name, ok, properties } from "@virtualstate/focus";
 
 function Component(this: This) {
+  const { current } = this.useRef(Math.random());
 
-    const { current } = this.useRef(Math.random())
+  console.log({ current });
 
-    console.log({ current });
+  const [state, setState] = this.useState<number>(0);
 
-    const [state, setState] = this.useState<number>(0);
+  this.useEffect(() => {
+    if (state === 0) {
+      setState(1);
+    }
+    if (state === 1) {
+      setState(2);
+    }
+    if (state === 2) {
+      setState(3);
+    }
+    return () => {
+      console.log({ was: state });
+    };
+  }, [state, setState]);
 
-    this.useEffect(() => {
-        if (state === 0) {
-            setState(1);
-        }
-        if (state === 1) {
-            setState(2);
-        }
-        if (state === 2) {
-            setState(3);
-        }
-        return () => {
-            console.log({ was: state });
-        }
-    }, [state, setState]);
+  const callback = this.useCallback(
+    function onClick() {
+      setState((value) => value + 2);
+    },
+    [setState]
+  );
 
-    const callback = this.useCallback(function onClick() {
-        setState(value => value + 2);
-    }, [setState]);
+  const close = this.useClose();
 
-    const close = this.useClose();
+  this.useEffect(() => {
+    if (state >= 3) {
+      close();
+    }
+  }, [state, close]);
 
-    this.useEffect(() => {
-        if (state >= 3) {
-            close();
-        }
-    }, [state, close])
-
-    return <button onClick={callback}>Value {state}</button>
+  return <button onClick={callback}>Value {state}</button>;
 }
 
 let button;
 
 for await ([button] of children(<Component />)) {
-    console.log(button);
-    ok(name(button) === "button");
+  console.log(button);
+  ok(name(button) === "button");
 
-    const { onClick } = properties(button);
-    ok(typeof onClick === "function");
+  const { onClick } = properties(button);
+  ok(typeof onClick === "function");
 }
 
 ok(button);
