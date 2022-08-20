@@ -388,13 +388,30 @@ function createdHookedComponent(source: ComponentFn) {
             return output;
         }
 
-        async function *stateful(): AsyncIterable<void> {
+        function getStateHooks() {
+            type StatefulHook = Hook & { [State]: UseStateHook };
             const { hooks } = context[HookState];
-            const states = hooks.map(hook => hook[State]).filter(Boolean);
-            ok(states.length);
+            return hooks.filter<StatefulHook>(isStatefulHook)
+
+            function isStatefulHook(hook: Hook): hook is StatefulHook {
+                return !!hook[State];
+            }
+        }
+
+        function getEffectHooks() {
+            type EffectHook = Hook & { [Effect]: UseEffectHook[] };
+            const { hooks } = context[HookState];
+            return hooks.filter<EffectHook>(isEffectHook);
+
+            function isEffectHook(hook: Hook): hook is EffectHook {
+                return !!hook[Effect];
+            }
+        }
+
+        async function *stateful(): AsyncIterable<void> {
             for await (const snapshot of union(
-                states.map(
-                    async function *mapState(state) {
+                getStateHooks().map(
+                    async function *mapState({ [State]: state }) {
                         for await (const value of state) {
                             yield [state, value] as const;
                         }
@@ -422,7 +439,8 @@ function createdHookedComponent(source: ComponentFn) {
             }
         }
 
-        const effects = new WeakSet();
+        const effects = new WeakSet(),
+            finalised = new WeakSet();
 
         let output;
 
@@ -431,8 +449,7 @@ function createdHookedComponent(source: ComponentFn) {
 
             const {
                 hooked,
-                isStateful,
-                hooks
+                isStateful
             } = context[HookState];
 
             if (!hooked) {
@@ -446,35 +463,33 @@ function createdHookedComponent(source: ComponentFn) {
                 statePromise = stateIterator.next();
             }
 
-            for (const hook of hooks) {
+            for (const hook of getEffectHooks()) {
                 const {
                     [Effect]: effect
                 } = hook;
-
-                if (effect) {
-                    const previous = effect.at(-2);
-                    const current = effect.at(-1);
-                    if (!effects.has(current)) {
-                        effects.add(current);
-                        if (previous?.finalise) {
+                const previous = effect.at(-2);
+                const current = effect.at(-1);
+                if (!effects.has(current)) {
+                    effects.add(current);
+                    if (previous?.finalise) {
+                        if (!finalised.has(previous)) {
                             const returned = previous.finalise();
                             if (isPromise(returned)) {
                                 await returned;
                             }
+                            finalised.add(previous);
                         }
-                        let returned = current.effect();
-                        if (isPromise(returned)) {
-                            returned = await returned;
-                        }
-                        if (isEffectReturnFn(returned)) {
-                            current.finalise = returned;
-                        }
-                        hook[Effect] = hook[Effect].slice(
-                            hook[Effect].indexOf(current)
-                        );
-                    } else {
-                        // console.log("Already ran effect");
+                    } else if (previous) {
+                        finalised.add(previous);
                     }
+                    let returned = current.effect();
+                    if (isPromise(returned)) {
+                        returned = await returned;
+                    }
+                    if (isEffectReturnFn(returned)) {
+                        current.finalise = returned;
+                    }
+                    hook[Effect] = hook[Effect].filter(effect => !finalised.has(effect));
                 }
             }
 
@@ -485,6 +500,17 @@ function createdHookedComponent(source: ComponentFn) {
             await statePromise;
 
         } while (context[HookState].isOpen);
+
+        for (const { [Effect]: effects } of getEffectHooks()) {
+            for (const effect of effects) {
+                if (!finalised.has(effect)) {
+                    const returned = effect?.finalise?.();
+                    if (isPromise(returned)) {
+                        await returned;
+                    }
+                }
+            }
+        }
 
         function isEffectReturnFn(value: unknown): value is EffectReturnFn {
             return typeof value === "function";
