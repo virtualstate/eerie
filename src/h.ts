@@ -450,31 +450,9 @@ function createdHookedComponent(source: ComponentFn) {
     }
 
     const effects = new WeakSet(),
-      finalised = new WeakSet();
+        finalised = new WeakSet();
 
-    let output;
-
-    do {
-      output = call();
-
-      const { hooked, isStateful, isOpen } = context[HookState];
-
-      if (!isOpen) {
-        return;
-      }
-
-      if (!hooked) {
-        return yield output;
-      }
-
-
-      let statePromise;
-
-      if (isStateful) {
-        stateIterator = stateIterator ?? stateful()[Symbol.asyncIterator]();
-        statePromise = stateIterator.next();
-      }
-
+    async function withEffects() {
       for (const hook of getEffectHooks()) {
         const { [Effect]: effect } = hook;
         const previous = effect.at(-2);
@@ -500,9 +478,47 @@ function createdHookedComponent(source: ComponentFn) {
             current.finalise = returned;
           }
           hook[Effect] = hook[Effect].filter(
-            (effect) => !finalised.has(effect)
+              (effect) => !finalised.has(effect)
           );
         }
+      }
+    }
+
+    async function withFinalisation() {
+      for (const { [Effect]: effects } of getEffectHooks()) {
+        for (const effect of effects) {
+          if (!finalised.has(effect)) {
+            const returned = effect?.finalise?.();
+            if (isPromise(returned)) {
+              await returned;
+            }
+          }
+        }
+      }
+    }
+
+    let output;
+
+    do {
+      output = call();
+
+      const { hooked, isStateful, isOpen } = context[HookState];
+
+      if (!isOpen) {
+        return;
+      }
+
+      await withEffects();
+
+      if (!hooked) {
+        return yield output;
+      }
+
+      let statePromise;
+
+      if (isStateful) {
+        stateIterator = stateIterator ?? stateful()[Symbol.asyncIterator]();
+        statePromise = stateIterator.next();
       }
 
       yield output;
@@ -512,16 +528,7 @@ function createdHookedComponent(source: ComponentFn) {
       await statePromise;
     } while (context[HookState].isOpen);
 
-    for (const { [Effect]: effects } of getEffectHooks()) {
-      for (const effect of effects) {
-        if (!finalised.has(effect)) {
-          const returned = effect?.finalise?.();
-          if (isPromise(returned)) {
-            await returned;
-          }
-        }
-      }
-    }
+    await withFinalisation();
 
     function isEffectReturnFn(value: unknown): value is EffectReturnFn {
       return typeof value === "function";
