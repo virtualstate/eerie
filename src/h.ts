@@ -3,15 +3,19 @@ import {isAsyncIterable, isPromise} from "./is";
 import {PushFn, p, union} from "@virtualstate/promise";
 import {ok} from "@virtualstate/focus";
 import {createCompositeKey, CompositeKeyFn} from "@virtualstate/composite-key";
-import {prev} from "cheerio/lib/api/traversing";
 
 type CompositeKey = ReturnType<CompositeKeyFn>;
 
 export function h(source: unknown, options: Record<string | symbol, unknown>, ...children: unknown[]) {
     if (isComponentFn(source)) {
-        source = createdHookedComponent(source);
+        return c(source, options, ...children);
     }
     return f(source, options, ...children);
+}
+
+function c(source: ComponentFn, options: Record<string | symbol, unknown>, ...children: unknown[]) {
+    const hooked = createdHookedComponent(source);
+    return f(hooked, options, ...children);
 }
 
 const FunctionToString = Function.prototype.toString;

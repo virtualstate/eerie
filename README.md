@@ -10,7 +10,7 @@ Spooky hooks
 
 ### Test Coverage
 
- ![100%25 lines covered](https://img.shields.io/badge/lines-100%25-brightgreen) ![100%25 statements covered](https://img.shields.io/badge/statements-100%25-brightgreen) ![100%25 functions covered](https://img.shields.io/badge/functions-100%25-brightgreen) ![100%25 branches covered](https://img.shields.io/badge/branches-100%25-brightgreen)
+ ![89.73%25 lines covered](https://img.shields.io/badge/lines-89.73%25-brightgreen) ![89.73%25 statements covered](https://img.shields.io/badge/statements-89.73%25-brightgreen) ![89.58%25 functions covered](https://img.shields.io/badge/functions-89.58%25-brightgreen) ![83.52%25 branches covered](https://img.shields.io/badge/branches-83.52%25-brightgreen)
 
 [//]: # (badges)
 
