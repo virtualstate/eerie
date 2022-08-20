@@ -459,11 +459,16 @@ function createdHookedComponent(source: ComponentFn) {
     do {
       output = call();
 
-      const { hooked, isStateful } = context[HookState];
+      const { hooked, isStateful, isOpen } = context[HookState];
+
+      if (!isOpen) {
+        return;
+      }
 
       if (!hooked) {
         return yield output;
       }
+
 
       let statePromise;
 
