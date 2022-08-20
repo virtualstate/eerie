@@ -62,6 +62,10 @@ interface ComponentHookState {
     isOpen: boolean;
 }
 
+interface ReferenceObject<T> {
+    current: T;
+}
+
 interface ComponentFnContext {
     [HookState]: ComponentHookState
     useState<T>(defaultValue?: UseStateDefault<T>): UseStateReturn<T>;
@@ -70,6 +74,7 @@ interface ComponentFnContext {
     useMemo<T>(fn: MemoFn<T>, dependencies?: Dependencies): unknown
     usePush<T>(value?: T): PushFn<T>;
     useClose(): CloseFn;
+    useRef<T>(defaultValue: T): ReferenceObject<T>;
 }
 
 const State = Symbol.for("@virtualstate/eerie/state");
@@ -113,8 +118,8 @@ interface MemoValue<T> {
 }
 
 interface UseMemoHook<T = unknown> {
+    compositeKey: CompositeKeyFn;
     values: WeakMap<CompositeKey, MemoValue<T>>;
-    keys: CompositeKeyFn;
 }
 
 interface Hook {
@@ -145,7 +150,12 @@ function createdHookedComponent(source: ComponentFn) {
             useCallback,
             useMemo,
             usePush,
-            useClose
+            useClose,
+            useRef
+        }
+
+        function useRef<T>(defaultValue: T): ReferenceObject<T> {
+            return useMemo(() => ({ current: defaultValue }), []);
         }
 
         function useHook<K extends keyof Hook, T extends Hook[K]>(
@@ -323,13 +333,13 @@ function createdHookedComponent(source: ComponentFn) {
             }
         }
 
-        function useMemo<T>(fn: MemoFn<T>, dependencies?: Dependencies): T {
-            const { keys, values } = useHook(
+        function useMemo<T>(fn: MemoFn<T>, dependencies: Dependencies = []): T {
+            const { compositeKey, values } = useHook(
                 Memo,
                 isMemoHook,
                 createMemo
             );
-            const key = keys(...dependencies);
+            const key = compositeKey(...dependencies);
             const existing = values.get(key);
             if (existing) {
                 return existing.value;
@@ -341,12 +351,13 @@ function createdHookedComponent(source: ComponentFn) {
             return value;
 
             function isMemoHook(value?: UseMemoHook): value is UseMemoHook<T> {
-                return value instanceof WeakMap;
+                return !!value;
             }
+
             function createMemo() {
                 return {
                     values: new WeakMap(),
-                    keys: createCompositeKey()
+                    compositeKey: createCompositeKey()
                 };
             }
         }

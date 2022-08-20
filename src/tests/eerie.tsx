@@ -2,6 +2,11 @@ import {h, This} from "../h";
 import {children, name, ok, properties} from "@virtualstate/focus";
 
 function Component(this: This) {
+
+    const { current } = this.useRef(Math.random())
+
+    console.log({ current });
+
     const [state, setState] = this.useState<number>(0);
 
     this.useEffect(() => {
