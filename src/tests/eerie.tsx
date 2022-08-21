@@ -1,5 +1,9 @@
-import { h, This } from "../h";
+import {h, This, UseStateActionInput, UseStateDefault} from "../h";
 import { children, name, ok, properties, h as f } from "@virtualstate/focus";
+import {p, Push} from "@virtualstate/promise";
+import { memo } from "@virtualstate/memo";
+import { anAsyncThing } from "@virtualstate/promise/the-thing";
+import {stateful} from "./stateful";
 
 async function withComponent(input: unknown) {
   let button;
@@ -151,5 +155,51 @@ async function withComponent(input: unknown) {
     }
   }
   await withComponent(<ComponentAsync />);
+
+}
+
+{
+  const h = f;
+
+
+
+  async function *ComponentAsyncStateful() {
+    const state = stateful<number>()
+
+    function effect(value?: number) {
+      if (!value) {
+        state(1)
+      } else if (value === 1) {
+        state(2);
+      } else if (value === 2) {
+        state(3)
+      }
+
+      return () => {
+        console.log({ was: value });
+      };
+    }
+
+    function onClick() {
+      state(value => value + 2);
+    }
+
+    yield <button onClick={onClick}>Value</button>
+
+    console.log("Watching state");
+
+    let lastEffect = effect(state.value);
+
+    for await (const value of state) {
+      lastEffect?.();
+      lastEffect = effect(value);
+      yield <button onClick={onClick}>Value {value}</button>;
+      if (value >= 3) {
+        break;
+      }
+    }
+    lastEffect?.();
+  }
+  await withComponent(<ComponentAsyncStateful />);
 
 }

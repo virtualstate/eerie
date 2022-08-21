@@ -44,8 +44,8 @@ interface ComponentFn<O = Record<string | symbol, unknown>> {
   (this: unknown, options: O, input?: unknown): unknown;
 }
 
-type UseStateDefault<T> = (() => T) | T;
-type UseStateActionInput<T> = ((value: T) => T) | T;
+export type UseStateDefault<T> = (() => T) | T;
+export type UseStateActionInput<T> = ((value: T) => T) | T;
 interface UseStateActionFn<T> {
   (input: UseStateActionInput<T>): void;
 }
