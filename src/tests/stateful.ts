@@ -13,7 +13,7 @@ export function stateful<T = unknown>(...args: [UseStateDefault<T>] | []) {
         } else {
             value = input;
         }
-        target.push(value);
+        return target.push(value);
     }
 
     if (args.length) {

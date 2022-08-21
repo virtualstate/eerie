@@ -1,12 +1,10 @@
-import {h, This, UseStateActionInput, UseStateDefault} from "../h";
-import { children, name, ok, properties, h as f } from "@virtualstate/focus";
-import {p, Push} from "@virtualstate/promise";
-import { memo } from "@virtualstate/memo";
-import { anAsyncThing } from "@virtualstate/promise/the-thing";
+import {h, This} from "../h";
+import { children, name, ok, properties, h as f, createFragment } from "@virtualstate/focus";
 import {stateful} from "./stateful";
 
 async function withComponent(input: unknown) {
   let button;
+  let number, string;
 
   for await ([button] of children(input)) {
     console.log(button);
@@ -14,12 +12,17 @@ async function withComponent(input: unknown) {
 
     const { onClick } = properties(button);
     ok(typeof onClick === "function");
+
+    for await ([string, number] of children(button)) {
+      console.log({ string, number });
+      ok(typeof string === "string", "Expected string");
+      ok(typeof number === "number" || !number, "Expected number");
+    }
   }
+
 
   ok(button, "No button");
 
-  const [string, number] = await children(button);
-  console.log({ string, number, button });
   ok(typeof string === "string", "Expected string");
   ok(typeof number === "number", "Expected number");
   ok(number === 3, "Expected 3");
@@ -254,21 +257,20 @@ async function withComponent(input: unknown) {
       state(value => value + 2);
     }
 
-    yield <button onClick={onClick}>Value {state}</button>
+    yield <button onClick={onClick}>Value {state}</button>;
 
     for await (const value of state) {
       if (value === 1) {
-        state(2);
+        await state(2);
       } else if (value === 2) {
-        state(3)
+        await state(3)
       }
+      console.log({ was: value });
       if (value >= 3) {
         break;
       }
     }
-
-    state.close();
-
+    await state.close();
   }
 
   await withComponent(<ComponentAsyncStatefulYieldControl />);
