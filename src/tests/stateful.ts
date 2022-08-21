@@ -4,14 +4,6 @@ import {ok} from "@virtualstate/focus";
 
 export function stateful<T = unknown>(...args: [UseStateDefault<T>] | []) {
     let value: T;
-    if (args.length) {
-        const [defaultValue] = args;
-        if (isInitFn(defaultValue)) {
-            value = defaultValue();
-        } else {
-            value = defaultValue;
-        }
-    }
 
     const target = new Push<T>({ keep: true });
     function push(input: UseStateActionInput<T>) {
@@ -24,6 +16,11 @@ export function stateful<T = unknown>(...args: [UseStateDefault<T>] | []) {
         target.push(value);
     }
 
+    if (args.length) {
+        const [defaultValue] = args;
+        push(defaultValue);
+    }
+
     const unknown: object = push;
     define(unknown, target);
     return unknown;
@@ -31,10 +28,6 @@ export function stateful<T = unknown>(...args: [UseStateDefault<T>] | []) {
     function isCallbackFn<T = unknown>(
         value: unknown
     ): value is (value: T) => T {
-        return typeof value === "function";
-    }
-
-    function isInitFn(value: unknown): value is () => T {
         return typeof value === "function";
     }
 

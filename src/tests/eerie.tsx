@@ -139,20 +139,16 @@ async function withComponent(input: unknown) {
 
     do {
 
-      yield <View />
+      yield <button onClick={onClick}>Value {state}</button>;
 
       lastEffect?.();
       lastEffect = effect();
 
     } while (state < 3);
 
-    yield <View />;
+    yield <button onClick={onClick}>Value {state}</button>;
 
     lastEffect?.();
-
-    function View() {
-      return <button onClick={onClick}>Value {state}</button>;
-    }
   }
   await withComponent(<ComponentAsync />);
 
@@ -197,6 +193,7 @@ async function withComponent(input: unknown) {
       }
     }
     lastEffect?.();
+    state.close();
   }
   await withComponent(<ComponentAsyncStateful />);
 
@@ -236,13 +233,44 @@ async function withComponent(input: unknown) {
       lastEffect?.();
       lastEffect = effect(value);
       if (value >= 3) {
-        state.close();
         break;
       }
     }
     lastEffect?.();
+    state.close();
   }
 
   await withComponent(<ComponentAsyncStatefulSingleYield />);
+
+}
+
+{
+  const h = f;
+
+  async function *ComponentAsyncStatefulYieldControl() {
+    const state = stateful<number>(1)
+
+    function onClick() {
+      state(value => value + 2);
+    }
+
+    yield <button onClick={onClick}>Value {state}</button>
+
+    for await (const value of state) {
+      if (value === 1) {
+        state(2);
+      } else if (value === 2) {
+        state(3)
+      }
+      if (value >= 3) {
+        break;
+      }
+    }
+
+    state.close();
+
+  }
+
+  await withComponent(<ComponentAsyncStatefulYieldControl />);
 
 }
