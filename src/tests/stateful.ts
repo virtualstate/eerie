@@ -1,16 +1,8 @@
 import {UseStateActionInput, UseStateDefault} from "../h";
 import {Push} from "@virtualstate/promise";
-import {memo} from "@virtualstate/memo";
 import {ok} from "@virtualstate/focus";
 
 export function stateful<T = unknown>(...args: [UseStateDefault<T>] | []) {
-
-    const target = new Push<UseStateActionInput<T>>();
-    function push(input: UseStateActionInput<T>) {
-        if (!target.open) return;
-        target.push(input);
-    }
-
     let value: T;
     if (args.length) {
         const [defaultValue] = args;
@@ -21,21 +13,19 @@ export function stateful<T = unknown>(...args: [UseStateDefault<T>] | []) {
         }
     }
 
-    const iterable: AsyncIterable<T> = {
-        async *[Symbol.asyncIterator]() {
-            if (args.length) yield value;
-            for await (const snapshot of target) {
-                if (isCallbackFn(snapshot)) {
-                    yield value = snapshot(value);
-                } else {
-                    yield value = snapshot;
-                }
-            }
+    const target = new Push<T>({ keep: true });
+    function push(input: UseStateActionInput<T>) {
+        if (!target.open) return;
+        if (isCallbackFn(input)) {
+            value = input(value);
+        } else {
+            value = input;
         }
+        target.push(value);
     }
 
     const unknown: object = push;
-    define(unknown, memo(iterable));
+    define(unknown, target);
     return unknown;
 
     function isCallbackFn<T = unknown>(

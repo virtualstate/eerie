@@ -16,13 +16,13 @@ async function withComponent(input: unknown) {
     ok(typeof onClick === "function");
   }
 
-  ok(button);
+  ok(button, "No button");
 
   const [string, number] = await children(button);
-  console.log({ string, number });
-  ok(typeof string === "string");
-  ok(typeof number === "number");
-  ok(number === 3);
+  console.log({ string, number, button });
+  ok(typeof string === "string", "Expected string");
+  ok(typeof number === "number", "Expected number");
+  ok(number === 3, "Expected 3");
 }
 
 {
@@ -161,8 +161,6 @@ async function withComponent(input: unknown) {
 {
   const h = f;
 
-
-
   async function *ComponentAsyncStateful() {
     const state = stateful<number>()
 
@@ -201,5 +199,50 @@ async function withComponent(input: unknown) {
     lastEffect?.();
   }
   await withComponent(<ComponentAsyncStateful />);
+
+}
+
+{
+  const h = f;
+
+  async function *ComponentAsyncStatefulSingleYield() {
+    const state = stateful<number>()
+
+    function effect(value?: number) {
+      if (!value) {
+        state(1)
+      } else if (value === 1) {
+        state(2);
+      } else if (value === 2) {
+        state(3)
+      }
+
+      return () => {
+        console.log({ was: value });
+      };
+    }
+
+    function onClick() {
+      state(value => value + 2);
+    }
+
+    yield <button onClick={onClick}>Value {state}</button>
+
+    console.log("Watching state");
+
+    let lastEffect = effect(state.value);
+
+    for await (const value of state) {
+      lastEffect?.();
+      lastEffect = effect(value);
+      if (value >= 3) {
+        state.close();
+        break;
+      }
+    }
+    lastEffect?.();
+  }
+
+  await withComponent(<ComponentAsyncStatefulSingleYield />);
 
 }

@@ -5,7 +5,7 @@
     "@virtualstate/dom": "https://cdn.skypack.dev/@virtualstate/dom",
     "@virtualstate/examples": "https://cdn.skypack.dev/@virtualstate/examples",
     "@virtualstate/fringe": "https://cdn.skypack.dev/@virtualstate/fringe",
-    "@virtualstate/focus": "https://cdn.skypack.dev/@virtualstate/focus",
+    "@virtualstate/focus": "https://cdn.skypack.dev/@virtualstate/focus@^1.2.0",
     "@virtualstate/focus/static-h": "https://cdn.skypack.dev/@virtualstate/focus/static-h",
     "@virtualstate/focus/h": "https://cdn.skypack.dev/@virtualstate/focus/h",
     "@virtualstate/hooks": "https://cdn.skypack.dev/@virtualstate/hooks",

@@ -22,7 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@virtualstate/composite-key": "^1.0.0",
-    "@virtualstate/focus": "^1.1.1",
+    "@virtualstate/focus": "^1.2.0",
     "@virtualstate/memo": "^1.8.0",
     "@virtualstate/promise": "^1.2.1"
   },

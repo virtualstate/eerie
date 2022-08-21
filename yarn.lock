@@ -802,6 +802,11 @@
   resolved "https://registry.yarnpkg.com/@virtualstate/focus/-/focus-1.1.1.tgz#9f162d9a54d8431e692657c26f0da39748666593"
   integrity sha512-GZhxaSTQv78Eq20HiSReML2sgeQFxUubitmiQlcW8z5V3IMkEQUUq12pe42UE6gF1ysI77llzTtPxOru2jwkew==
 
+"@virtualstate/focus@^1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@virtualstate/focus/-/focus-1.2.0.tgz#2b1e8f20a350efad6ddd9ea3bd964ba9f6282fd6"
+  integrity sha512-Smt0J0x9giRzG6m/m5fQopj05nWWG6crSBO/WASsEJXus4EBHyel7OkfAgPlQXGS5SWNvpr+UO/R4Wf+F4Pe4A==
+
 "@virtualstate/fringe@^2.46.0":
   version "2.46.0"
   resolved "https://registry.npmjs.org/@virtualstate/fringe/-/fringe-2.46.0.tgz#f8efe290f5f98ea9a1da6d2de8264435583af9c3"
